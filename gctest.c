@@ -4,6 +4,7 @@
 #include "gc.h"
 
 int main (int argc, char** argv) {
+  printf("Program starts");
 
   // Check usage and extract the command line argument(s).
   if (argc != 2) {
@@ -38,6 +39,8 @@ int main (int argc, char** argv) {
   }
 
   gc_root_set_insert(x);
+
+  printf("We are going to call GC: gctest");
   gc();
 
   return 0;

@@ -229,6 +229,162 @@ void gc_init () {
 //   different name than the one you used.  Check the details.
 void* gc_malloc (size_t size) {
 
+  // initializing the heap if this is the first malloc call
+  gc_init();
+
+  // if a block of size 0 is requested return NULL
+  if (size == 0) {
+    return NULL;
+  }
+
+  // make current point to the head of the free list
+  header_s* current = free_list_head;
+
+  // make best NULL for now
+  // it will get updated as better fitting blocks are found
+  header_s* best    = NULL;
+
+  // while we are not at the tail (or end) of the free list
+  while (current != NULL) {
+    // if the block (in fact its header) that current points to is allocated
+    // throw an error as an allocated block should not be in the free list
+    // the address of the header of that block will also be in the error message
+    if (current->allocated) {
+      ERROR("Allocated block on free list", (intptr_t)current);
+    }
+    
+    // if best hasn't been updated yet and if requested memory size is at most the size of the current block
+    // then make the best-fit block the one "current" points to
+    // if best has already been updated, then also check if the size of the current block is smaller
+    // (i.e. a better fit) than the present best block
+    if ( (best == NULL && size <= current->size) ||
+	 (best != NULL && size <= current->size && current->size < best->size) ) {
+      best = current;
+    }
+
+    // if at some point the best has been updated and the size of the block it points to
+    // is exactly the size user requested, then there is no need to continue traversing the free list
+    if (best != NULL && best->size == size) {
+      break;
+    }
+    
+    // move on to the next block the current block points to in its header
+    current = current->next;
+    
+  }
+
+  // the pointer to the block to be allocated
+  // this will be returned at the end
+  void* new_block_ptr = NULL;
+
+  // if a suitable free block has been found in the free list
+  if (best != NULL) {
+
+    // HERE WE ARE REMOVING THE BEST BLOCK FROM THE FREE LIST IF IT WAS FOUND
+
+    // if the best block is the head of the list
+    // then update the head of the free list to be the block its "next" points to
+    if (best->prev == NULL) {
+      free_list_head   = best->next;
+    } 
+    
+    // if the best block is not at the head
+    // then make its previous neighbor to point to "best" block's next neighbor
+    else {
+      best->prev->next = best->next;
+    }
+
+    // if the best block is not at the tail of the free list
+    // then also update its next neighbor, so that its "prev" points to the
+    // the "prev" of the best block
+    if (best->next != NULL) {
+      best->next->prev = best->prev;
+    }
+
+    // make the pointers of the best block to not point to any other neighbor blocks
+    best->prev       = NULL;
+    best->next       = NULL;
+
+    // mark the best block as allocated
+    best->allocated = true;
+
+    // we will later on return the pointer to the block not its header - so update that
+    new_block_ptr   = HEADER_TO_BLOCK(best);
+    
+  } 
+
+  // IF A SUTABLE BLOCK WASN'T FOUND - DO POINTER BUMPING
+  else {
+
+    // the padding that should be put before the header
+    size_t    padding = 16 - ( (free_addr + sizeof(header_s)) % 16 );
+
+    // =====if the above gives us a padding of 16 then make the padding 0
+    if (padding == 16)
+    {
+      padding = 0;
+    }
+    
+    // assign the next available free addr + padding to the address of the header's pointer
+    header_s* header_ptr = (header_s*)(free_addr + padding);
+    
+    // get the block pointer by shifting the header_ptr by the size of header_s
+    new_block_ptr = HEADER_TO_BLOCK(header_ptr);
+
+    // because this block will be allocated
+    // its header's next, prev should be set to NULL - (it is not in the free list)
+    header_ptr->next      = NULL;
+    header_ptr->prev      = NULL;
+
+    // put the size requested to be allocated in the header as well
+    header_ptr->size      = size;
+
+    // make sure the block is marked as allocated
+    header_ptr->allocated = true;
+    
+    // find the next free address for future pointer bumping
+    intptr_t new_free_addr = (intptr_t)new_block_ptr + size;
+
+    // if this updated free addr gets beyond the end of the heap addr
+    // then return NULL right here
+    if (new_free_addr > end_addr) {
+
+      return NULL;
+
+    } 
+    // otherwise update the free address
+    else {
+
+      free_addr = new_free_addr;
+
+    }
+  }
+
+  //===========================
+  //HERE WE ADD ALLOCATED BLOCK TO THE ALLOCATED LIST
+  //===========================
+
+  //first let us get the header of the block we are going to allocate
+  header_s* new_header_ptr = BLOCK_TO_HEADER(new_block_ptr);
+
+  //make "next" of this header point to the head of the allocated list
+  new_header_ptr->next = allocated_list_head;
+
+  //make "prev" of the new_header NULL
+  new_header_ptr->prev = NULL;
+
+  //if the head of the list is not NULL then make sure to update its "prev"
+  if (allocated_list_head != NULL) {
+    allocated_list_head->prev = new_header_ptr;
+  }
+
+  //finally update the head of the list as well
+  allocated_list_head = new_header_ptr;
+
+  DEBUG("The bloc added into allocated list:", (intptr_t) new_block_ptr);
+
+  // return the pointer to the block of at least the size requested
+  return new_block_ptr;
 
 } // gc_malloc ()
 // ==============================================================================
@@ -242,6 +398,62 @@ void* gc_malloc (size_t size) {
 //   unchanged.
 void gc_free (void* ptr) {
 
+  // if the ptr is NULL terminate the function right here
+  if (ptr == NULL) {
+    return;
+  }
+
+  // get the pointer to the header of the block we are trying to free
+  header_s* header_ptr = BLOCK_TO_HEADER(ptr);
+
+  // if the header isn't marked as allocated
+  // then throw an error as this block is free already - you cannot double free
+  if (!header_ptr->allocated) {
+    ERROR("Double-free: ", (intptr_t)header_ptr);
+  }
+
+  //===========================
+  //HERE WE TAKE THE BLOCK OUT OF THE ALLOCATED LIST
+  //===========================
+
+  //if this block is the head of the allocated list
+  if (header_ptr->prev == NULL) {
+    //update the head of the list
+    allocated_list_head = header_ptr->next;
+  }
+  else {
+    //get to the prev neighbor and update its next
+    header_ptr->prev->next = header_ptr->next;
+  }
+
+  //if the block is not at the tail
+  if (header_ptr->next != NULL) {
+    //get to the next neighbor and update its prev
+    header_ptr->next->prev = header_ptr->prev;
+  }
+
+  DEBUG("The block taken out from the allocated list:", (intptr_t) ptr);
+  //===========================
+
+  // make the "next" of this block to point to the current head of the free list
+  header_ptr->next = free_list_head;
+
+  // now make this block we are freeing the head of the list
+  free_list_head   = header_ptr;
+
+  // make the "prev" of this block to be NULL as it is at the head of the list
+  header_ptr->prev = NULL;
+
+  // if the thing our head points to isn't null
+  // i.e. if it is not at tht tail of the list
+  if (header_ptr->next != NULL) {
+    header_ptr->next->prev = header_ptr;
+  }
+
+  DEBUG("The block put into free list:", (intptr_t) ptr);
+
+  // mark the header as not allocated
+  header_ptr->allocated = false;
   
   
 } // gc_free ()
@@ -272,6 +484,39 @@ void* gc_new (gc_layout_s* layout) {
 } // gc_new ()
 // ==============================================================================
 
+// ==============================================================================
+/**
+ * Extract the pointers from a block
+ * and push them onto rs_stack
+ * parameters:
+ *   layout_ptr: ptr to the layout object that the headers contain
+ *   block_ptr:  ptr to the block whose neighbors we are finding
+ */
+void extract_push (gc_layout_s* layout_ptr, void* block_ptr) {
+
+  // get the number of ptrs from the layout object
+  unsigned int num_ptrs = layout_ptr->num_ptrs;
+
+  // get the array of offsets for retrieval of those ptrs
+  size_t* ptr_offsets = layout_ptr->ptr_offsets;
+
+  // traverse the array of offsets num_ptrs times
+  for (unsigned int i = 0; i < num_ptrs; i++)
+  {
+    // get the offset value
+    size_t ptr_offset = ptr_offsets[i];
+
+    // shift addr by that offset to get the pointer to the neighbor block
+    void* neighbor_block_ptr = ((void*)((intptr_t)block_ptr + ptr_offset));
+    
+    // now push this pointer to the root stack
+    rs_push(neighbor_block_ptr);
+
+  }
+
+} // extract_push ()
+// ==============================================================================
+
 
 
 // ==============================================================================
@@ -288,9 +533,35 @@ void mark () {
   //   pointers that starts at `root_set_head`, setting the `marked` field on
   //   each object you reach.
   
+  printf("Started the marking process");
+  
+  // go on marking as long as the root set stack is not empty
+  while(root_set_head != NULL)
+  {
+    // get the ptr to block next up to be considered by popping the root set stack
+    void* block_ptr = rs_pop();
+
+    // get the ptr to the header of this block
+    header_s* header_ptr = BLOCK_TO_HEADER(block_ptr);
+
+    // if the block hasn't been visited/marked
+    if (! header_ptr->marked)
+    {
+      // then mark the block's header
+      header_ptr->marked = true;
+
+      // get the pointer to the layout object of this block
+      gc_layout_s* layout_ptr = header_ptr->layout;
+
+      // GET PTRs OF OTHER BLOCKS THAT THIS BLOCK HAS A REFERENCE OF
+      // AND PUSH THEM ONTO RS_STACK
+      extract_push(layout_ptr, block_ptr);
+    }
+
+  }
+
 } // mark ()
 // ==============================================================================
-
 
 
 // ==============================================================================
@@ -320,6 +591,8 @@ void sweep () {
  */
 
 void gc () {
+
+  printf("Calling the GC");
 
   // Traverse the heap, marking the objects visited as live.
   mark();
