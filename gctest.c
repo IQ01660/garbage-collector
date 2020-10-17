@@ -4,7 +4,7 @@
 #include "gc.h"
 
 int main (int argc, char** argv) {
-  printf("Program starts");
+  printf("Program starts: gctest\n");
 
   // Check usage and extract the command line argument(s).
   if (argc != 2) {
@@ -13,12 +13,16 @@ int main (int argc, char** argv) {
   }
   int num_objs = atoi(argv[1]);
 
+  printf("Defining what an int object looks like to the GC: gctest\n");
+
   // Define what an int object looks like to the GC.
   gc_layout_s* int_layout = malloc(sizeof(gc_layout_s));
   assert(int_layout != NULL);
   int_layout->size        = sizeof(int);
   int_layout->num_ptrs    = 0;
   int_layout->ptr_offsets = NULL;
+
+  printf("Make an array of ptrs to int objects: gctest\n");
 
   // Make an array of pointers to int objects.  Define the array.
   gc_layout_s* array_layout = malloc(sizeof(gc_layout_s));
@@ -30,17 +34,21 @@ int main (int argc, char** argv) {
   for (int i = 0; i < num_objs; i += 1) {
     array_layout->ptr_offsets[i] = i * sizeof(int*);
   }
-  
+  printf("will call gc_new: gctest\n");
   int** x = gc_new(array_layout);
   assert(x != NULL);
+  printf("called gc_new   : gctest\n");
   for (int i = 0; i < num_objs; i += 1) {
     x[i]  = gc_new(int_layout);
     *x[i] = i; // Make each int hold a value.
   }
 
+  printf("called a bunch of gc_news   : gctest\n");
+
+  printf("will do gc_root_insert\n");
   gc_root_set_insert(x);
 
-  printf("We are going to call GC: gctest");
+  printf("We are going to call GC: gctest\n");
   gc();
 
   return 0;

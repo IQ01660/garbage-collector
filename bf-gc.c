@@ -383,6 +383,8 @@ void* gc_malloc (size_t size) {
 
   DEBUG("The bloc added into allocated list:", (intptr_t) new_block_ptr);
 
+
+  printf("Allocated ptr %p ; gc_malloc()\n", new_block_ptr);
   // return the pointer to the block of at least the size requested
   return new_block_ptr;
 
@@ -493,18 +495,21 @@ void* gc_new (gc_layout_s* layout) {
  *   block_ptr:  ptr to the block whose neighbors we are finding
  */
 void extract_push (gc_layout_s* layout_ptr, void* block_ptr) {
-
+  printf("extract_push ======================\n");
   // get the number of ptrs from the layout object
   unsigned int num_ptrs = layout_ptr->num_ptrs;
+  printf("getting the number of ptrs\n");
 
   // get the array of offsets for retrieval of those ptrs
   size_t* ptr_offsets = layout_ptr->ptr_offsets;
-
+  printf("getting the offsets array\n");
   // traverse the array of offsets num_ptrs times
-  for (unsigned int i = 0; i < num_ptrs; i++)
+  for (int i = 0; i < num_ptrs; i++)
   {
+    printf("i is: %d \n", i);	  
     // get the offset value
     size_t ptr_offset = ptr_offsets[i];
+    printf("%zu \n", ptr_offset);
 
     // shift addr by that offset to get the pointer to the neighbor block
     void* neighbor_block_ptr = ((void*)((intptr_t)block_ptr + ptr_offset));
@@ -512,6 +517,7 @@ void extract_push (gc_layout_s* layout_ptr, void* block_ptr) {
     // now push this pointer to the root stack
     rs_push(neighbor_block_ptr);
 
+    printf("a pointer %p pushed onto a stack\n", neighbor_block_ptr);
   }
 
 } // extract_push ()
@@ -533,32 +539,41 @@ void mark () {
   //   pointers that starts at `root_set_head`, setting the `marked` field on
   //   each object you reach.
   
-  printf("Started the marking process");
+  printf("Started the marking process: mark(): bf-gc\n");
   
   // go on marking as long as the root set stack is not empty
   while(root_set_head != NULL)
   {
+    printf("the root set stack is not empty: mark(): bf-gc\n");	  
     // get the ptr to block next up to be considered by popping the root set stack
     void* block_ptr = rs_pop();
+
+    printf("a pointer is popped from the root stack\n");
 
     // get the ptr to the header of this block
     header_s* header_ptr = BLOCK_TO_HEADER(block_ptr);
 
+    printf("got the pointer to header of the block\n");
+
     // if the block hasn't been visited/marked
     if (! header_ptr->marked)
     {
+      printf("The block isn't marked\n");	    
       // then mark the block's header
       header_ptr->marked = true;
 
       // get the pointer to the layout object of this block
       gc_layout_s* layout_ptr = header_ptr->layout;
-
+      printf("done getting the layout object's ptr\n");
       // GET PTRs OF OTHER BLOCKS THAT THIS BLOCK HAS A REFERENCE OF
       // AND PUSH THEM ONTO RS_STACK
       extract_push(layout_ptr, block_ptr);
+      printf("done extraction and pushing\n");
     }
 
   }
+
+  printf("done marking\n");
 
 } // mark ()
 // ==============================================================================
@@ -592,7 +607,7 @@ void sweep () {
 
 void gc () {
 
-  printf("Calling the GC");
+  printf("Calling the GC\n");
 
   // Traverse the heap, marking the objects visited as live.
   mark();
