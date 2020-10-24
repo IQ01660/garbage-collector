@@ -518,9 +518,12 @@ void extract_push (gc_layout_s* layout_ptr, void* block_ptr) {
     void*  neighbor_block_ptr =    *neighbor_block_handle;
     
     // now push this pointer to the root stack
-    rs_push(neighbor_block_ptr);
 
-    printf("a pointer %p pushed onto a stack\n", neighbor_block_ptr);
+    if (neighbor_block_ptr != NULL)
+    {
+      rs_push(neighbor_block_ptr);
+      printf("a pointer %p pushed onto a stack\n", neighbor_block_ptr);
+    }
   }
 
 } // extract_push ()
@@ -593,9 +596,12 @@ void sweep () {
   // get the head of the allocated list
   header_s* current_header_ptr = allocated_list_head;
 
+
   // while there is something yet to traverse in the list
   while(current_header_ptr != NULL)
   {
+    
+    printf("current header ptr:%p \n", current_header_ptr);
     // see if the header is marked
     bool isCurrentMarked = current_header_ptr->marked;
 
@@ -613,6 +619,7 @@ void sweep () {
 
     // get to the next allocated block's header
     current_header_ptr = current_header_ptr->next;
+    printf("done sweeping this one: %p \n", current_header_ptr);
   }
 
   printf("============================: sweep() \n");

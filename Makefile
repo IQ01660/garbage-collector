@@ -8,7 +8,7 @@ gctest: gctest.c gc.h bf-gc.o safeio.o
 	$(CC) $(CFLAGS) -o gctest gctest.c bf-gc.o safeio.o
 
 gctest2: gctest2.c gc.h bf-gc.o safeio.o
-    $(CC) $(CFLAGS) -o gctest2 gctest2.c bf-gc.o safeio.o
+	$(CC) $(CFLAGS) -o gctest2 gctest2.c bf-gc.o safeio.o
 
 bf-gc.o: gc.h bf-gc.c
 	$(CC) $(CFLAGS) -c bf-gc.c
