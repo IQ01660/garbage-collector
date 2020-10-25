@@ -21,3 +21,6 @@ docs:
 
 clean:
 	rm -rf *.o gctest
+
+clean2:
+	rm -rf *.o gctest2

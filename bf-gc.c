@@ -547,12 +547,12 @@ void mark () {
   
   printf("Started the marking process: mark(): bf-gc\n");
   
+  void* block_ptr = rs_pop();
+
   // go on marking as long as the root set stack is not empty
-  while(root_set_head != NULL)
+  while(block_ptr != NULL)
   {
     printf("the root set stack is not empty: mark(): bf-gc\n");	  
-    // get the ptr to block next up to be considered by popping the root set stack
-    void* block_ptr = rs_pop();
 
     // get the ptr to the header of this block
     header_s* header_ptr = BLOCK_TO_HEADER(block_ptr);
@@ -569,11 +569,16 @@ void mark () {
       // GET PTRs OF OTHER BLOCKS THAT THIS BLOCK HAS A REFERENCE OF
       // AND PUSH THEM ONTO RS_STACK
       extract_push(layout_ptr, block_ptr);
+      // get the ptr to block next up to be considered by popping the root set stack
     }
 
+    block_ptr = rs_pop();
   }
 
-  printf("done marking\n");
+  if (root_set_head == NULL)
+  {
+    printf("ROOT SET IS EMPTY - I AM DONE MARKING\n");
+  }
 
 } // mark ()
 // ==============================================================================
@@ -601,7 +606,10 @@ void sweep () {
   while(current_header_ptr != NULL)
   {
     
+    header_s* next_header_ptr = current_header_ptr->next;
+
     printf("current header ptr:%p \n", current_header_ptr);
+
     // see if the header is marked
     bool isCurrentMarked = current_header_ptr->marked;
 
@@ -618,8 +626,7 @@ void sweep () {
     }
 
     // get to the next allocated block's header
-    current_header_ptr = current_header_ptr->next;
-    printf("done sweeping this one: %p \n", current_header_ptr);
+    current_header_ptr = next_header_ptr;
   }
 
   printf("============================: sweep() \n");
